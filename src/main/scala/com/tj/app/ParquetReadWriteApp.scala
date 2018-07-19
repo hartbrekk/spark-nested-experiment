@@ -1,74 +1,58 @@
 package com.tj.app
 
-import java.time.LocalDateTime
-
 import com.tj.common.BaseDriver
 
 object ParquetReadWriteApp extends BaseDriver {
 
   import sqlContext.implicits._
 
-  //val retailDataDF = sqlContext.read.option("inferSchema", "true").json(dataDir + "/retaildata.json")
-  //retailDataDF.printSchema
-  //retailDataDF.show
+  println("Dataset Schema:")
+  val retailDataDS = sqlContext.read.option("inferSchema", "true").json(dataDir + "/retaildata.json").as[RetailData]
+  retailDataDS.printSchema
+
+  println("Grouping by:")
+  val nestedDS = retailDataDS.groupBy(_.country).mapGroups { case (x, y) => (x, y.toSeq) }
+  nestedDS.printSchema()
+  nestedDS.cache()
+  nestedDS.show(5)
 
 
-  //val userDF = sqlContext.read.parquet(dataDir + "/nested16.parquet") //.as[UserDataPq]
-  //userDF.printSchema
-  //userDF.show
+  println("Writing out Parquet file ...")
+  nestedDS.toDF.write.parquet(dataDir + "/nestedDS16.parquet")
 
-  println("Checking DS now")
-  val userDS = sqlContext.read.parquet(dataDir + "/nested16.parquet").as[InvoiceByCountry]
-  userDS.printSchema
-  userDS.show
-  //val userDS = userDF.as[UserDataPq]
+  println("Output DataFrame verify ...")
+  val outputDF = sqlContext.read.parquet(dataDir + "/nestedDS16.parquet")
+  outputDF.printSchema
 
-  //val userDS = userDF.as[UserDataPq]
+  println("Output DataSet verify ...")
+  val outputDS = sqlContext.read.parquet(dataDir + "/nestedDS16.parquet").as[RetailDataByCountry]
+  outputDS.printSchema
+  outputDS.show
 
-  //userDS.collect().foreach(println(_))
-
-  //userDS.write.parquet(dataDir + "/nested16.parquet")
-  //userDS.write.json(dataDir + "/nested16.json")
-  import org.apache.spark.sql.functions._
-  //POC
-  //val actualDF = retailDataDF.groupBy("Country").agg(collect_list(struct("Description","InvoiceNo")))
-  //actualDF.printSchema()
-  //actualDF.show()
-
-
+  // POC
+  // val actualDF = retailDataDF.groupBy("Country").agg(collect_list(struct("Description","InvoiceNo")))
+  // val nestedDS = sqlContext.read.parquet(dataDir + "/nested16.parquet").as[InvoiceByCountry]
+  // nestedDS.write.parquet(dataDir + "/nested16.parquet")
+  // nestedDS.write.json(dataDir + "/nested16.json")
 }
 
-case class Automobile(make: String,
-                      fuelType: String,
-                      aspire: String,
-                      doors: String,
-                      body: String,
-                      drive: String,
-                      cylinders: String,
-                      hp: Int,
-                      rpm: Int,
-                      mpgcity: Int,
-                      mpghwy: Int,
-                      price: BigDecimal)
+case class RetailData(country: String, customerID: Double, description: String, invoiceDate: String, invoiceNo: String, quantity: Long, stockCode: String, unitPrice: Double) extends Serializable {}
 
-case class UserDataPq(registrationDttm: String,
-                      id: Int,
-                      firstName: String,
-                      lastName: String,
-                      email: String,
-                      gender: String,
-                      ipAddress: String,
-                      cc: String,
-                      country: String,
-                      birthdate: String,
-                      salary: Double,
-                      title: String,
-                      comments: String)
+/*
+root
+|-- Country: string (nullable = true)
+|-- CustomerID: double (nullable = true)
+|-- Description: string (nullable = true)
+|-- InvoiceDate: string (nullable = true)
+|-- InvoiceNo: string (nullable = true)
+|-- Quantity: long (nullable = true)
+|-- StockCode: string (nullable = true)
+|-- UnitPrice: double (nullable = true)
+*/
 
-case class InvoiceByCountry(country: String, nested: Seq[Invoice])
+case class RetailDataByCountry(country: String, customList: Seq[RetailData]) extends Serializable {}
 
-case class Invoice(description: String, invoiceNo: String)
-
+case class InvoiceByCountry(country: String, nested: Seq[Invoice]) extends Serializable {}
 
 /*
 |-- Country: string (nullable = true)
@@ -78,3 +62,4 @@ case class Invoice(description: String, invoiceNo: String)
  |    |    |-- InvoiceNo: string (nullable = true)
 
  */
+case class Invoice(description: String, invoiceNo: String) extends Serializable {}
